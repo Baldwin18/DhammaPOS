@@ -10,7 +10,7 @@
         .bold { font-weight: bold; }
         .divider { border-top: 1px dashed #000; margin: 6px 0; }
         .row { display: flex; justify-content: space-between; margin: 2px 0; }
-        .total-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 13px; }
+        .right { text-align: right; }
         @media print {
             body { width: 100%; }
             .no-print { display: none; }
@@ -18,15 +18,29 @@
     </style>
 </head>
 <body>
-    <div class="center bold" style="font-size:14px;">DHAMMA VEGETARIAN</div>
-    <div class="center" style="font-size:11px;">Struk Pembayaran</div>
+    {{-- Header toko --}}
+    <div class="center bold" style="font-size:14px;">Dhamma Vegetarian</div>
+    <div class="center" style="font-size:10px; margin-top:3px;">Jl. DR. Sutomo No.99, Tj. Garbus Satu,</div>
+    <div class="center" style="font-size:10px;">Kec. Lubuk Pakam, Kab. Deli Serdang,</div>
+    <div class="center" style="font-size:10px;">Sumatera Utara 20518</div>
+
     <div class="divider"></div>
-    <div class="row"><span>Kode</span><span>{{ $transaksi->kode_transaksi }}</span></div>
-    <div class="row"><span>Tanggal</span><span>{{ $transaksi->tanggal->format('d/m/Y H:i') }}</span></div>
-    <div class="row"><span>Kasir</span><span>{{ $transaksi->user->name ?? '-' }}</span></div>
+
+    {{-- Info transaksi --}}
+    <div class="row">
+        <span>{{ $transaksi->tanggal->format('d/m/Y') }}</span>
+        <span>Kasir: {{ $transaksi->user->name ?? '-' }}</span>
+    </div>
+    <div class="row">
+        <span>{{ $transaksi->tanggal->format('H:i:s') }}</span>
+    </div>
+    <div style="margin: 2px 0;">No. {{ $transaksi->kode_transaksi }}</div>
+
     <div class="divider"></div>
+
+    {{-- Detail item --}}
     @foreach($transaksi->detailPenjualan as $detail)
-    <div style="margin: 3px 0;">
+    <div style="margin: 4px 0;">
         <div>{{ $detail->produk->nama ?? '-' }}</div>
         <div class="row">
             <span>{{ $detail->jumlah }} x Rp {{ number_format($detail->harga_jual, 0, ',', '.') }}</span>
@@ -34,14 +48,36 @@
         </div>
     </div>
     @endforeach
+
     <div class="divider"></div>
-    <div class="total-row"><span>TOTAL</span><span>Rp {{ number_format($transaksi->total, 0, ',', '.') }}</span></div>
+
+    {{-- Summary --}}
+    <div class="row">
+        <span>Total Qty</span>
+        <span>{{ $transaksi->detailPenjualan->sum('jumlah') }}</span>
+    </div>
+    <div class="row">
+        <span>Sub Total</span>
+        <span>Rp {{ number_format($transaksi->total, 0, ',', '.') }}</span>
+    </div>
+    <div class="row bold">
+        <span>Total Harga</span>
+        <span>Rp {{ number_format($transaksi->total, 0, ',', '.') }}</span>
+    </div>
     @if($transaksi->status === 'sudah_bayar')
-    <div class="row"><span>Bayar</span><span>Rp {{ number_format($transaksi->bayar, 0, ',', '.') }}</span></div>
-    <div class="row"><span>Kembalian</span><span>Rp {{ number_format($transaksi->kembalian, 0, ',', '.') }}</span></div>
+    <div class="row">
+        <span>Bayar (Cash)</span>
+        <span>Rp {{ number_format($transaksi->bayar, 0, ',', '.') }}</span>
+    </div>
+    <div class="row">
+        <span>Kembali</span>
+        <span>Rp {{ number_format($transaksi->kembalian, 0, ',', '.') }}</span>
+    </div>
     @endif
+
     <div class="divider"></div>
-    <div class="center" style="margin-top:6px;">Terima kasih!</div>
+
+    <div class="center" style="margin-top:8px; font-size:11px;">Terima kasih telah makan di tempat kami</div>
 
     @if(request('autoprint'))
     <script>window.onload = () => window.print();</script>
