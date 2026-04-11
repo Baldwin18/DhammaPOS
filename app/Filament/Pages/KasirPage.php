@@ -18,19 +18,20 @@ class KasirPage extends Page
     protected static ?int $navigationSort = 0;
     protected static string $view = 'filament.pages.kasir-page';
 
-    public static function canAccess(): bool
-    {
-        return true;
-    }
+    public static function canAccess(): bool { return true; }
 
     public array $cart = [];
     public ?int $kategori_id = null;
     public string $search = '';
 
-    public function getKategoris()
-    {
-        return Kategori::all();
-    }
+    // State untuk modal bayar
+    public bool $showBayarModal = false;
+    public string $nominalBayar = '';
+    public ?int $lastTransaksiId = null;
+    public float $kembalian = 0;
+    public bool $showKembalian = false;
+
+    public function getKategoris() { return Kategori::all(); }
 
     public function getProduks()
     {
@@ -41,10 +42,7 @@ class KasirPage extends Page
             ->get();
     }
 
-    public function filterKategori(?int $id): void
-    {
-        $this->kategori_id = $id;
-    }
+    public function filterKategori(?int $id): void { $this->kategori_id = $id; }
 
     public function addToCart(int $produkId): void
     {
@@ -69,17 +67,11 @@ class KasirPage extends Page
         $this->cart[$produkId]['subtotal'] = $this->cart[$produkId]['harga'] * $this->cart[$produkId]['jumlah'];
     }
 
-    public function removeFromCart(int $produkId): void
-    {
-        unset($this->cart[$produkId]);
-    }
+    public function removeFromCart(int $produkId): void { unset($this->cart[$produkId]); }
 
     public function updateJumlah(int $produkId, int $jumlah): void
     {
-        if ($jumlah <= 0) {
-            $this->removeFromCart($produkId);
-            return;
-        }
+        if ($jumlah <= 0) { $this->removeFromCart($produkId); return; }
         $produk = Produk::find($produkId);
         if ($jumlah > $produk->stok) {
             Notification::make()->title("Stok tidak cukup! Tersedia: {$produk->stok}")->danger()->send();
@@ -89,16 +81,100 @@ class KasirPage extends Page
         $this->cart[$produkId]['subtotal'] = $this->cart[$produkId]['harga'] * $jumlah;
     }
 
-    public function getTotal(): float
-    {
-        return collect($this->cart)->sum('subtotal');
-    }
+    public function getTotal(): float { return collect($this->cart)->sum('subtotal'); }
 
     public function clearCart(): void
     {
         $this->cart = [];
+        $this->showBayarModal = false;
+        $this->nominalBayar = '';
+        $this->showKembalian = false;
     }
 
+    // Buka modal bayar
+    public function bukaBayar(): void
+    {
+        if (empty($this->cart)) {
+            Notification::make()->title('Keranjang kosong!')->warning()->send();
+            return;
+        }
+        $this->nominalBayar = '';
+        $this->showKembalian = false;
+        $this->showBayarModal = true;
+    }
+
+    public function tutupBayar(): void { $this->showBayarModal = false; }
+
+    // Hitung kembalian live
+    public function updatedNominalBayar(): void
+    {
+        $nominal = (float) str_replace('.', '', $this->nominalBayar);
+        $this->kembalian = max(0, $nominal - $this->getTotal());
+    }
+
+    public function konfirmasiBayar(): void
+    {
+        $bayar = (float) str_replace('.', '', $this->nominalBayar);
+        $total = $this->getTotal();
+
+        if ($bayar < $total) {
+            Notification::make()->title('Uang kurang!')->body('Kurang Rp ' . number_format($total - $bayar, 0, ',', '.'))->danger()->send();
+            return;
+        }
+
+        // Simpan transaksi
+        $transaksi = TransaksiPenjualan::withoutEvents(function () use ($total, $bayar) {
+            return TransaksiPenjualan::create([
+                'user_id' => auth()->id(),
+                'kode_transaksi' => 'TRX-' . strtoupper(uniqid()),
+                'tanggal' => now(),
+                'total' => $total,
+                'status' => 'sudah_bayar',
+                'bayar' => $bayar,
+                'kembalian' => $bayar - $total,
+            ]);
+        });
+
+        foreach ($this->cart as $item) {
+            DetailPenjualan::create([
+                'transaksi_penjualan_id' => $transaksi->id,
+                'produk_id' => $item['produk_id'],
+                'jumlah' => $item['jumlah'],
+                'harga_jual' => $item['harga'],
+                'subtotal' => $item['subtotal'],
+            ]);
+        }
+
+        // Kurangi stok produk & bahan baku
+        foreach ($this->cart as $item) {
+            $produk = Produk::find($item['produk_id']);
+            if ($produk) {
+                $produk->decrement('stok', $item['jumlah']);
+                foreach ($produk->resep as $resep) {
+                    $kebutuhanBase = \App\Observers\BahanBakuObserver::convertToBase($resep->jumlah * $item['jumlah'], $resep->satuan);
+                    $stokBase = \App\Observers\BahanBakuObserver::convertToBase(1, $resep->bahanBaku->satuan);
+                    $resep->bahanBaku->decrement('stok', $kebutuhanBase / $stokBase);
+                }
+            }
+        }
+
+        $this->kembalian = $bayar - $total;
+        $this->showKembalian = true;
+        $this->lastTransaksiId = $transaksi->id;
+        $this->cart = [];
+
+        // Dispatch event untuk buka struk otomatis
+        $this->dispatch('buka-struk', id: $transaksi->id);
+    }
+
+    public function selesai(): void
+    {
+        $this->showBayarModal = false;
+        $this->showKembalian = false;
+        $this->nominalBayar = '';
+    }
+
+    // Simpan tanpa bayar (makan di tempat)
     public function simpanTransaksi(): void
     {
         if (empty($this->cart)) {
@@ -108,7 +184,6 @@ class KasirPage extends Page
 
         $total = $this->getTotal();
 
-        // Buat transaksi tanpa trigger observer recalculate (detail belum ada)
         $transaksi = TransaksiPenjualan::withoutEvents(function () use ($total) {
             return TransaksiPenjualan::create([
                 'user_id' => auth()->id(),
@@ -132,11 +207,9 @@ class KasirPage extends Page
         }
 
         $this->cart = [];
-
         Notification::make()
             ->title('Pesanan tersimpan!')
             ->body('Kode: ' . $transaksi->kode_transaksi . ' | Total: Rp ' . number_format($total, 0, ',', '.'))
-            ->success()
-            ->send();
+            ->success()->send();
     }
 }

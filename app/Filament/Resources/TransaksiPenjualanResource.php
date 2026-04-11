@@ -121,6 +121,13 @@ class TransaksiPenjualanResource extends Resource
         ])
         ->defaultSort('id', 'desc')
         ->actions([
+            Action::make('cetak_struk')
+                ->label('Cetak Struk')
+                ->icon('heroicon-o-printer')
+                ->color('info')
+                ->visible(fn ($record) => $record->status === 'sudah_bayar')
+                ->url(fn ($record) => 'javascript:cetakStruk(' . $record->id . ')')
+                ->extraAttributes(['wire:navigate.prevent' => true]),
             Action::make('konfirmasi_bayar')
                 ->label('Konfirmasi Pembayaran')
                 ->icon('heroicon-o-banknotes')

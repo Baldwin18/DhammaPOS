@@ -55,6 +55,25 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+            ->renderHook('panels::body.end', fn () => '
+                <script>
+                    function cetakStruk(id) {
+                        var f = document.createElement("iframe");
+                        f.style.display = "none";
+                        f.src = "/struk/" + id + "?autoprint=1";
+                        document.body.appendChild(f);
+                        f.onload = function() {
+                            f.contentWindow.print();
+                            setTimeout(function() { document.body.removeChild(f); }, 5000);
+                        };
+                    }
+                    document.addEventListener("livewire:initialized", () => {
+                        Livewire.on("cetak-struk-inline", (event) => {
+                            cetakStruk(event.id);
+                        });
+                    });
+                </script>
+            ');
     }
 }

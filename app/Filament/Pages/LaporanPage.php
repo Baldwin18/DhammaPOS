@@ -14,10 +14,7 @@ class LaporanPage extends Page
     protected static ?string $navigationGroup = 'Laporan';
     protected static string $view = 'filament.pages.laporan-page';
 
-    public static function canAccess(): bool
-    {
-        return true;
-    }
+    public static function canAccess(): bool { return true; }
 
     public string $tanggal_mulai = '';
     public string $tanggal_selesai = '';
@@ -60,5 +57,42 @@ class LaporanPage extends Page
         return (float) Pembelian::whereDate('tanggal', '>=', $this->tanggal_mulai)
             ->whereDate('tanggal', '<=', $this->tanggal_selesai)
             ->sum('total');
+    }
+
+    public function exportCsv(): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $penjualan = $this->getPenjualan();
+        $pembelian = $this->getPembelian();
+        $filename = 'laporan-' . $this->tanggal_mulai . '-sd-' . $this->tanggal_selesai . '.csv';
+
+        return response()->streamDownload(function () use ($penjualan, $pembelian) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['LAPORAN PENJUALAN']);
+            fputcsv($out, ['Kode Transaksi', 'Tanggal', 'Kasir', 'Status', 'Total']);
+            foreach ($penjualan as $trx) {
+                fputcsv($out, [
+                    $trx->kode_transaksi,
+                    $trx->tanggal->format('d/m/Y'),
+                    $trx->user->name ?? '-',
+                    $trx->status === 'sudah_bayar' ? 'Sudah Bayar' : 'Belum Bayar',
+                    $trx->total,
+                ]);
+            }
+            fputcsv($out, ['', '', '', 'TOTAL', $penjualan->sum('total')]);
+            fputcsv($out, []);
+            fputcsv($out, ['LAPORAN PEMBELIAN']);
+            fputcsv($out, ['ID', 'Tanggal', 'Supplier', 'Status', 'Total']);
+            foreach ($pembelian as $beli) {
+                fputcsv($out, [
+                    '#' . $beli->id,
+                    $beli->tanggal->format('d/m/Y'),
+                    $beli->supplier->nama ?? '-',
+                    $beli->status === 'lunas' ? 'Lunas' : 'Belum Lunas',
+                    $beli->total,
+                ]);
+            }
+            fputcsv($out, ['', '', '', 'TOTAL', $pembelian->sum('total')]);
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 }

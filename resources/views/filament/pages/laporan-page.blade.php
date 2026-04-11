@@ -11,6 +11,11 @@
             <input type="date" wire:model.live="tanggal_selesai"
                 class="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-800 text-sm" />
         </div>
+        <button wire:click="exportCsv"
+            style="background-color:#16a34a;color:white;"
+            class="px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 flex items-center gap-2">
+            ⬇ Export CSV
+        </button>
     </div>
 
     {{-- Summary cards - pemilik only --}}

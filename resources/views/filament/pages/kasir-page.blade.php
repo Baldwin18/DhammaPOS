@@ -76,10 +76,15 @@
                 <span>Total</span>
                 <span class="text-amber-500">Rp {{ number_format($this->getTotal(), 0, ',', '.') }}</span>
             </div>
+            <button wire:click="bukaBayar"
+                style="background-color:#16a34a;color:#ffffff;"
+                class="w-full py-2 hover:opacity-90 font-semibold text-sm rounded-lg">
+                Bayar Sekarang
+            </button>
             <button wire:click="simpanTransaksi"
                 style="background-color:#f59e0b;color:#ffffff;"
                 class="w-full py-2 hover:opacity-90 font-semibold text-sm rounded-lg">
-                Simpan Pesanan
+                Simpan (Bayar Nanti)
             </button>
             <button wire:click="clearCart"
                 style="color:#374151;"
@@ -90,4 +95,85 @@
     </div>
 
 </div>
+
+{{-- Modal Bayar --}}
+@if($showBayarModal)
+<div class="fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.5);">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-96">
+        @if(!$showKembalian)
+            <h3 class="font-bold text-xl mb-4">Konfirmasi Pembayaran</h3>
+            <div class="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                @foreach($cart as $item)
+                <div class="flex justify-between text-sm py-1">
+                    <span>{{ $item['nama'] }} x{{ $item['jumlah'] }}</span>
+                    <span>Rp {{ number_format($item['subtotal'], 0, ',', '.') }}</span>
+                </div>
+                @endforeach
+                <div class="flex justify-between font-bold text-base border-t border-gray-200 dark:border-gray-600 mt-2 pt-2">
+                    <span>Total</span>
+                    <span class="text-amber-500">Rp {{ number_format($this->getTotal(), 0, ',', '.') }}</span>
+                </div>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-1">Nominal Bayar</label>
+                <div class="flex items-center border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
+                    <span class="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-sm font-medium">Rp</span>
+                    <input type="text" wire:model.live="nominalBayar"
+                        placeholder="Contoh: 50.000"
+                        class="flex-1 px-3 py-2 bg-white dark:bg-gray-800 text-sm outline-none"
+                        wire:keydown.enter="konfirmasiBayar" />
+                </div>
+                @if($nominalBayar && (float)str_replace('.', '', $nominalBayar) >= $this->getTotal())
+                <p class="text-green-500 text-sm mt-1 font-medium">
+                    Kembalian: Rp {{ number_format((float)str_replace('.', '', $nominalBayar) - $this->getTotal(), 0, ',', '.') }}
+                </p>
+                @elseif($nominalBayar)
+                <p class="text-red-500 text-sm mt-1">Uang kurang!</p>
+                @endif
+            </div>
+            <div class="flex gap-2">
+                <button wire:click="tutupBayar"
+                    class="flex-1 py-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm font-medium">
+                    Batal
+                </button>
+                <button wire:click="konfirmasiBayar"
+                    style="background-color:#16a34a;color:white;"
+                    class="flex-1 py-2 rounded-lg text-sm font-semibold hover:opacity-90">
+                    Konfirmasi
+                </button>
+            </div>
+        @else
+            {{-- Tampilan kembalian --}}
+            <div class="text-center py-4">
+                <div class="text-5xl mb-3">✅</div>
+                <h3 class="font-bold text-xl mb-1">Pembayaran Berhasil!</h3>
+                <p class="text-gray-500 text-sm mb-4">Kembalian untuk pelanggan:</p>
+                <div class="text-4xl font-bold text-green-500 mb-6">
+                    Rp {{ number_format($kembalian, 0, ',', '.') }}
+                </div>
+                <div class="flex gap-2">
+                    <a href="/struk/{{ $lastTransaksiId }}" target="_blank"
+                        style="background-color:#3b82f6;color:white;"
+                        class="flex-1 py-3 rounded-lg font-semibold hover:opacity-90 text-center text-sm">
+                        🖨 Cetak Struk
+                    </a>
+                    <button wire:click="selesai"
+                        style="background-color:#f59e0b;color:white;"
+                        class="flex-1 py-3 rounded-lg font-semibold hover:opacity-90 text-sm">
+                        Transaksi Baru
+                    </button>
+                </div>
+            </div>
+        @endif
+    </div>
+</div>
+@endif
 </x-filament-panels::page>
+
+<script>
+    document.addEventListener('livewire:initialized', () => {
+        Livewire.on('buka-struk', (event) => {
+            cetakStruk(event.id);
+        });
+    });
+</script>
